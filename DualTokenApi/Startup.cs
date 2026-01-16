@@ -22,6 +22,7 @@ namespace DualTokenApi
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddControllers();
+            services.AddSwaggerGen();
 
             var keyA = Encoding.ASCII.GetBytes(Configuration["JwtConfig:KeyA"]);
             var keyB = Encoding.ASCII.GetBytes(Configuration["JwtConfig:KeyB"]);
@@ -56,6 +57,8 @@ namespace DualTokenApi
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
+                app.UseSwagger();
+                app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "DualTokenApi v1"));
             }
 
             app.UseHttpsRedirection();
