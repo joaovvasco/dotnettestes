@@ -17,13 +17,19 @@ namespace DualTokenApi.Services
             public DateTime CreatedAt { get; set; }
         }
 
-        private readonly ConcurrentDictionary<string, List<KeyInfo>> _keys;
+        private class SchemeKeySet
+        {
+            public KeyInfo Primary { get; set; }
+            public KeyInfo Secondary { get; set; }
+        }
+
+        private readonly ConcurrentDictionary<string, SchemeKeySet> _keys;
         private readonly ConcurrentDictionary<string, object> _locks;
         private readonly TimeSpan _rotationInterval;
 
         public SigningKeyService(IConfiguration configuration)
         {
-            _keys = new ConcurrentDictionary<string, List<KeyInfo>>();
+            _keys = new ConcurrentDictionary<string, SchemeKeySet>();
             _locks = new ConcurrentDictionary<string, object>();
 
             // Load rotation interval from config, default to 24 hours
@@ -34,13 +40,13 @@ namespace DualTokenApi.Services
             var keyA = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(configuration["JwtConfig:KeyA"]));
             var keyB = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(configuration["JwtConfig:KeyB"]));
 
-            _keys.TryAdd("SchemeA", new List<KeyInfo>
+            _keys.TryAdd("SchemeA", new SchemeKeySet
             {
-                new KeyInfo { Key = keyA, CreatedAt = DateTime.UtcNow }
+                Primary = new KeyInfo { Key = keyA, CreatedAt = DateTime.UtcNow }
             });
-            _keys.TryAdd("SchemeB", new List<KeyInfo>
+            _keys.TryAdd("SchemeB", new SchemeKeySet
             {
-                new KeyInfo { Key = keyB, CreatedAt = DateTime.UtcNow }
+                Primary = new KeyInfo { Key = keyB, CreatedAt = DateTime.UtcNow }
             });
         }
 
@@ -50,28 +56,24 @@ namespace DualTokenApi.Services
 
             lock (lockObj)
             {
-                if (!_keys.TryGetValue(scheme, out var keyList) || !keyList.Any())
+                if (!_keys.TryGetValue(scheme, out var keySet))
                 {
                     throw new ArgumentException($"No keys found for scheme: {scheme}");
                 }
 
-                var currentKeyInfo = keyList.Last();
-
                 // Check if it's time to rotate
-                if (DateTime.UtcNow - currentKeyInfo.CreatedAt > _rotationInterval)
+                if (DateTime.UtcNow - keySet.Primary.CreatedAt > _rotationInterval)
                 {
-                    // Rotate
-                    var newKey = GenerateNewKey();
-                    var newKeyInfo = new KeyInfo
+                    // Rotate: Primary becomes Secondary, New Key becomes Primary
+                    keySet.Secondary = keySet.Primary;
+                    keySet.Primary = new KeyInfo
                     {
-                        Key = newKey,
+                        Key = GenerateNewKey(),
                         CreatedAt = DateTime.UtcNow
                     };
-                    keyList.Add(newKeyInfo);
-                    return newKey;
                 }
 
-                return currentKeyInfo.Key;
+                return keySet.Primary.Key;
             }
         }
 
@@ -81,10 +83,14 @@ namespace DualTokenApi.Services
 
             lock (lockObj)
             {
-                if (_keys.TryGetValue(scheme, out var keyList))
+                if (_keys.TryGetValue(scheme, out var keySet))
                 {
-                    // Return a copy of the list to avoid thread issues after leaving the lock
-                    return keyList.Select(k => k.Key).ToList();
+                    var list = new List<SecurityKey> { keySet.Primary.Key };
+                    if (keySet.Secondary != null)
+                    {
+                        list.Add(keySet.Secondary.Key);
+                    }
+                    return list;
                 }
             }
             return Enumerable.Empty<SecurityKey>();
