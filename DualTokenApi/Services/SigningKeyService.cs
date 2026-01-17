@@ -63,17 +63,7 @@ namespace DualTokenApi.Services
                     throw new ArgumentException($"No keys found for scheme: {scheme}");
                 }
 
-                // Check if it's time to rotate
-                if (DateTime.UtcNow - keySet.Primary.CreatedAt > _rotationInterval)
-                {
-                    // Rotate: Primary becomes Secondary, New Key becomes Primary
-                    keySet.Secondary = keySet.Primary;
-                    keySet.Primary = new KeyInfo
-                    {
-                        Key = GenerateNewKey(),
-                        CreatedAt = DateTime.UtcNow
-                    };
-                }
+                RotateKeysIfNecessary(keySet);
 
                 return keySet.Primary.Key;
             }
@@ -87,6 +77,8 @@ namespace DualTokenApi.Services
             {
                 if (_keys.TryGetValue(scheme, out var keySet))
                 {
+                    RotateKeysIfNecessary(keySet);
+
                     var list = new List<SecurityKey> { keySet.Primary.Key };
                     if (keySet.Secondary != null)
                     {
@@ -98,9 +90,24 @@ namespace DualTokenApi.Services
             return Enumerable.Empty<SecurityKey>();
         }
 
+        private void RotateKeysIfNecessary(SchemeKeySet keySet)
+        {
+            // Check if it's time to rotate
+            if (DateTime.UtcNow - keySet.Primary.CreatedAt > _rotationInterval)
+            {
+                // Rotate: Primary becomes Secondary, New Key becomes Primary
+                keySet.Secondary = keySet.Primary;
+                keySet.Primary = new KeyInfo
+                {
+                    Key = GenerateNewKey(),
+                    CreatedAt = DateTime.UtcNow
+                };
+            }
+        }
+
         private SecurityKey GenerateNewKey()
         {
-            var rng = RandomNumberGenerator.Create();
+            using var rng = RandomNumberGenerator.Create();
             var bytes = new byte[32]; // 256 bits
             rng.GetBytes(bytes);
             return new SymmetricSecurityKey(bytes);
