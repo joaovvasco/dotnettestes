@@ -11,54 +11,91 @@ namespace DualTokenApi.Services
 {
     public class SigningKeyService : ISigningKeyService
     {
-        private readonly ConcurrentDictionary<string, List<SecurityKey>> _keys;
+        private class KeyInfo
+        {
+            public SecurityKey Key { get; set; }
+            public DateTime CreatedAt { get; set; }
+        }
+
+        private readonly ConcurrentDictionary<string, List<KeyInfo>> _keys;
+        private readonly ConcurrentDictionary<string, object> _locks;
+        private readonly TimeSpan _rotationInterval;
 
         public SigningKeyService(IConfiguration configuration)
         {
-            _keys = new ConcurrentDictionary<string, List<SecurityKey>>();
+            _keys = new ConcurrentDictionary<string, List<KeyInfo>>();
+            _locks = new ConcurrentDictionary<string, object>();
+
+            // Load rotation interval from config, default to 24 hours
+            double minutes = configuration.GetValue<double>("JwtConfig:RotationIntervalMinutes", 1440);
+            _rotationInterval = TimeSpan.FromMinutes(minutes);
 
             // Initialize with keys from configuration
             var keyA = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(configuration["JwtConfig:KeyA"]));
             var keyB = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(configuration["JwtConfig:KeyB"]));
 
-            _keys.TryAdd("SchemeA", new List<SecurityKey> { keyA });
-            _keys.TryAdd("SchemeB", new List<SecurityKey> { keyB });
+            _keys.TryAdd("SchemeA", new List<KeyInfo>
+            {
+                new KeyInfo { Key = keyA, CreatedAt = DateTime.UtcNow }
+            });
+            _keys.TryAdd("SchemeB", new List<KeyInfo>
+            {
+                new KeyInfo { Key = keyB, CreatedAt = DateTime.UtcNow }
+            });
         }
 
         public SecurityKey GetCurrentKey(string scheme)
         {
-            if (_keys.TryGetValue(scheme, out var keys) && keys.Any())
+            var lockObj = _locks.GetOrAdd(scheme, new object());
+
+            lock (lockObj)
             {
-                // Return the last added key (most recent)
-                return keys.Last();
+                if (!_keys.TryGetValue(scheme, out var keyList) || !keyList.Any())
+                {
+                    throw new ArgumentException($"No keys found for scheme: {scheme}");
+                }
+
+                var currentKeyInfo = keyList.Last();
+
+                // Check if it's time to rotate
+                if (DateTime.UtcNow - currentKeyInfo.CreatedAt > _rotationInterval)
+                {
+                    // Rotate
+                    var newKey = GenerateNewKey();
+                    var newKeyInfo = new KeyInfo
+                    {
+                        Key = newKey,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    keyList.Add(newKeyInfo);
+                    return newKey;
+                }
+
+                return currentKeyInfo.Key;
             }
-            throw new ArgumentException($"No keys found for scheme: {scheme}");
         }
 
         public IEnumerable<SecurityKey> GetValidationKeys(string scheme)
         {
-            if (_keys.TryGetValue(scheme, out var keys))
+            var lockObj = _locks.GetOrAdd(scheme, new object());
+
+            lock (lockObj)
             {
-                return keys;
+                if (_keys.TryGetValue(scheme, out var keyList))
+                {
+                    // Return a copy of the list to avoid thread issues after leaving the lock
+                    return keyList.Select(k => k.Key).ToList();
+                }
             }
             return Enumerable.Empty<SecurityKey>();
         }
 
-        public void Rotate(string scheme)
+        private SecurityKey GenerateNewKey()
         {
-            // Generate a new 256-bit key
             var rng = RandomNumberGenerator.Create();
-            var bytes = new byte[32];
+            var bytes = new byte[32]; // 256 bits
             rng.GetBytes(bytes);
-            var newKey = new SymmetricSecurityKey(bytes);
-
-            _keys.AddOrUpdate(scheme,
-                new List<SecurityKey> { newKey },
-                (k, list) =>
-                {
-                    list.Add(newKey);
-                    return list;
-                });
+            return new SymmetricSecurityKey(bytes);
         }
     }
 }

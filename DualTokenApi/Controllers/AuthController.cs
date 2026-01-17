@@ -32,20 +32,6 @@ namespace DualTokenApi.Controllers
             return Ok(new { token = GenerateToken(key, "Employee") });
         }
 
-        [HttpPost("rotate-a")]
-        public IActionResult RotateKeyA()
-        {
-            _signingKeyService.Rotate("SchemeA");
-            return Ok("Key for SchemeA rotated.");
-        }
-
-        [HttpPost("rotate-b")]
-        public IActionResult RotateKeyB()
-        {
-            _signingKeyService.Rotate("SchemeB");
-            return Ok("Key for SchemeB rotated.");
-        }
-
         private string GenerateToken(SecurityKey key, string role)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
