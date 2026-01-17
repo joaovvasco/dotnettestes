@@ -1,5 +1,5 @@
 using System;
-using System.Text;
+using DualTokenApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -24,8 +24,9 @@ namespace DualTokenApi
             services.AddControllers();
             services.AddSwaggerGen();
 
-            var keyA = Encoding.ASCII.GetBytes(Configuration["JwtConfig:KeyA"]);
-            var keyB = Encoding.ASCII.GetBytes(Configuration["JwtConfig:KeyB"]);
+            // Create and register the SigningKeyService
+            var signingKeyService = new SigningKeyService(Configuration);
+            services.AddSingleton<ISigningKeyService>(signingKeyService);
 
             services.AddAuthentication()
                 .AddJwtBearer("SchemeA", options =>
@@ -33,7 +34,11 @@ namespace DualTokenApi
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(keyA),
+                        // Use Resolver to fetch all valid keys from the service
+                        IssuerSigningKeyResolver = (token, securityToken, kid, validationParameters) =>
+                        {
+                            return signingKeyService.GetValidationKeys("SchemeA");
+                        },
                         ValidateIssuer = false,
                         ValidateAudience = false,
                         ClockSkew = TimeSpan.Zero
@@ -44,7 +49,10 @@ namespace DualTokenApi
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(keyB),
+                        IssuerSigningKeyResolver = (token, securityToken, kid, validationParameters) =>
+                        {
+                            return signingKeyService.GetValidationKeys("SchemeB");
+                        },
                         ValidateIssuer = false,
                         ValidateAudience = false,
                         ClockSkew = TimeSpan.Zero

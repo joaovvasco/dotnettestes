@@ -1,9 +1,8 @@
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
+using DualTokenApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 namespace DualTokenApi.Controllers
@@ -12,28 +11,42 @@ namespace DualTokenApi.Controllers
     [Route("[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
+        private readonly ISigningKeyService _signingKeyService;
 
-        public AuthController(IConfiguration configuration)
+        public AuthController(ISigningKeyService signingKeyService)
         {
-            _configuration = configuration;
+            _signingKeyService = signingKeyService;
         }
 
         [HttpGet("token-a")]
         public IActionResult GetTokenA()
         {
-            var key = Encoding.ASCII.GetBytes(_configuration["JwtConfig:KeyA"]);
+            var key = _signingKeyService.GetCurrentKey("SchemeA");
             return Ok(new { token = GenerateToken(key, "Manager") });
         }
 
         [HttpGet("token-b")]
         public IActionResult GetTokenB()
         {
-            var key = Encoding.ASCII.GetBytes(_configuration["JwtConfig:KeyB"]);
+            var key = _signingKeyService.GetCurrentKey("SchemeB");
             return Ok(new { token = GenerateToken(key, "Employee") });
         }
 
-        private string GenerateToken(byte[] key, string role)
+        [HttpPost("rotate-a")]
+        public IActionResult RotateKeyA()
+        {
+            _signingKeyService.Rotate("SchemeA");
+            return Ok("Key for SchemeA rotated.");
+        }
+
+        [HttpPost("rotate-b")]
+        public IActionResult RotateKeyB()
+        {
+            _signingKeyService.Rotate("SchemeB");
+            return Ok("Key for SchemeB rotated.");
+        }
+
+        private string GenerateToken(SecurityKey key, string role)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var tokenDescriptor = new SecurityTokenDescriptor
@@ -44,7 +57,7 @@ namespace DualTokenApi.Controllers
                     new Claim(ClaimTypes.Role, role)
                 }),
                 Expires = DateTime.UtcNow.AddHours(1),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature)
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
