@@ -1,3 +1,4 @@
+using DualTokenApi.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -5,7 +6,7 @@ namespace DualTokenApi.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    [Authorize(AuthenticationSchemes = "SchemeB", Roles = "Employee")]
+    [DualSchemeAuthorize(Roles = "Employee")]
     public class ServiceBController : ControllerBase
     {
         [HttpGet]
