@@ -32,9 +32,11 @@ namespace DualTokenApi.Services
             _keys = new ConcurrentDictionary<string, SchemeKeySet>();
             _locks = new ConcurrentDictionary<string, object>();
 
-            // Load rotation interval from config, default to 24 hours
-            double minutes = configuration.GetValue<double>("JwtConfig:RotationIntervalMinutes", 1440);
-            _rotationInterval = TimeSpan.FromMinutes(minutes);
+            // Load expiration time from config, default to 60 minutes
+            double expirationMinutes = configuration.GetValue<double>("JwtConfig:ExpirationMinutes", 60);
+
+            // Rotation interval is Expiration + 1 minute
+            _rotationInterval = TimeSpan.FromMinutes(expirationMinutes + 1);
 
             // Initialize with keys from configuration
             var keyA = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(configuration["JwtConfig:KeyA"]));

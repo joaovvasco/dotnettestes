@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using DualTokenApi.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 namespace DualTokenApi.Controllers
@@ -12,10 +13,12 @@ namespace DualTokenApi.Controllers
     public class AuthController : ControllerBase
     {
         private readonly ISigningKeyService _signingKeyService;
+        private readonly IConfiguration _configuration;
 
-        public AuthController(ISigningKeyService signingKeyService)
+        public AuthController(ISigningKeyService signingKeyService, IConfiguration configuration)
         {
             _signingKeyService = signingKeyService;
+            _configuration = configuration;
         }
 
         [HttpGet("token-a")]
@@ -34,6 +37,8 @@ namespace DualTokenApi.Controllers
 
         private string GenerateToken(SecurityKey key, string role)
         {
+            double expirationMinutes = _configuration.GetValue<double>("JwtConfig:ExpirationMinutes", 60);
+
             var tokenHandler = new JwtSecurityTokenHandler();
             var tokenDescriptor = new SecurityTokenDescriptor
             {
@@ -42,7 +47,7 @@ namespace DualTokenApi.Controllers
                     new Claim("id", "user_id"),
                     new Claim(ClaimTypes.Role, role)
                 }),
-                Expires = DateTime.UtcNow.AddHours(1),
+                Expires = DateTime.UtcNow.AddMinutes(expirationMinutes),
                 SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature)
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
