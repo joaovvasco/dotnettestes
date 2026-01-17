@@ -23,22 +23,26 @@ namespace DualTokenApi.Controllers
         public IActionResult GetTokenA()
         {
             var key = Encoding.ASCII.GetBytes(_configuration["JwtConfig:KeyA"]);
-            return Ok(new { token = GenerateToken(key) });
+            return Ok(new { token = GenerateToken(key, "Manager") });
         }
 
         [HttpGet("token-b")]
         public IActionResult GetTokenB()
         {
             var key = Encoding.ASCII.GetBytes(_configuration["JwtConfig:KeyB"]);
-            return Ok(new { token = GenerateToken(key) });
+            return Ok(new { token = GenerateToken(key, "Employee") });
         }
 
-        private string GenerateToken(byte[] key)
+        private string GenerateToken(byte[] key, string role)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(new[] { new Claim("id", "user_id") }),
+                Subject = new ClaimsIdentity(new[]
+                {
+                    new Claim("id", "user_id"),
+                    new Claim(ClaimTypes.Role, role)
+                }),
                 Expires = DateTime.UtcNow.AddHours(1),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };

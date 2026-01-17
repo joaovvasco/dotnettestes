@@ -5,7 +5,7 @@ namespace DualTokenApi.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    [Authorize(AuthenticationSchemes = "SchemeB")]
+    [Authorize(AuthenticationSchemes = "SchemeB", Roles = "Employee")]
     public class ServiceBController : ControllerBase
     {
         [HttpGet]
