@@ -41,7 +41,8 @@ namespace DualTokenApi
                         },
                         ValidateIssuer = false,
                         ValidateAudience = false,
-                        ClockSkew = TimeSpan.Zero
+                        ClockSkew = TimeSpan.Zero,
+                        AuthenticationType = "SchemeA"
                     };
                 })
                 .AddJwtBearer("SchemeB", options =>
@@ -55,7 +56,8 @@ namespace DualTokenApi
                         },
                         ValidateIssuer = false,
                         ValidateAudience = false,
-                        ClockSkew = TimeSpan.Zero
+                        ClockSkew = TimeSpan.Zero,
+                        AuthenticationType = "SchemeB"
                     };
                 });
         }
