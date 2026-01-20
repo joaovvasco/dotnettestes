@@ -30,8 +30,9 @@ namespace DualTokenApi.Controllers
 
             if (model.Username == configUser && model.Password == configPass)
             {
-                var key = _signingKeyService.GetCurrentKey("SchemeA");
-                return Ok(new { token = GenerateToken(key, "Manager", model.Username) });
+                var keys = _signingKeyService.GetKeys("SchemeA");
+                LogKeys(keys);
+                return Ok(new { token = GenerateToken(keys.Primary, "Manager", model.Username) });
             }
 
             return Unauthorized("Invalid credentials");
@@ -44,11 +45,27 @@ namespace DualTokenApi.Controllers
 
             if (model.ApiKey == configKey)
             {
-                var key = _signingKeyService.GetCurrentKey("SchemeB");
-                return Ok(new { token = GenerateToken(key, "Employee", "ServiceBot") });
+                var keys = _signingKeyService.GetKeys("SchemeB");
+                LogKeys(keys);
+                return Ok(new { token = GenerateToken(keys.Primary, "Employee", "ServiceBot") });
             }
 
             return Unauthorized("Invalid API Key");
+        }
+
+        private void LogKeys((SecurityKey Primary, SecurityKey Secondary) keys)
+        {
+            Console.WriteLine($"PrimarySigningKey: {GetKeyString(keys.Primary)}");
+            Console.WriteLine($"SecondarySigningKey: {GetKeyString(keys.Secondary)}");
+        }
+
+        private string GetKeyString(SecurityKey key)
+        {
+            if (key is SymmetricSecurityKey symKey)
+            {
+                return Convert.ToBase64String(symKey.Key);
+            }
+            return key?.ToString() ?? "None";
         }
 
         private string GenerateToken(SecurityKey key, string role, string subjectName)

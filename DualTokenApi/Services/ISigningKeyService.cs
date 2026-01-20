@@ -7,5 +7,6 @@ namespace DualTokenApi.Services
     {
         SecurityKey GetCurrentKey(string scheme);
         IEnumerable<SecurityKey> GetValidationKeys(string scheme);
+        (SecurityKey Primary, SecurityKey Secondary) GetKeys(string scheme);
     }
 }

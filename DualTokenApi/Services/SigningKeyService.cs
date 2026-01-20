@@ -69,6 +69,23 @@ namespace DualTokenApi.Services
             }
         }
 
+        public (SecurityKey Primary, SecurityKey Secondary) GetKeys(string scheme)
+        {
+            var lockObj = _locks.GetOrAdd(scheme, new object());
+
+            lock (lockObj)
+            {
+                if (!_keys.TryGetValue(scheme, out var keySet))
+                {
+                    throw new ArgumentException($"No keys found for scheme: {scheme}");
+                }
+
+                RotateKeysIfNecessary(keySet);
+
+                return (keySet.Primary.Key, keySet.Secondary?.Key);
+            }
+        }
+
         public IEnumerable<SecurityKey> GetValidationKeys(string scheme)
         {
             var lockObj = _locks.GetOrAdd(scheme, new object());
