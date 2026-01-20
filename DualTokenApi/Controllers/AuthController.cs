@@ -1,6 +1,7 @@
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using DualTokenApi.Models;
 using DualTokenApi.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -21,21 +22,36 @@ namespace DualTokenApi.Controllers
             _configuration = configuration;
         }
 
-        [HttpGet("token-a")]
-        public IActionResult GetTokenA()
+        [HttpPost("login")]
+        public IActionResult Login([FromBody] LoginModel model)
         {
-            var key = _signingKeyService.GetCurrentKey("SchemeA");
-            return Ok(new { token = GenerateToken(key, "Manager") });
+            var configUser = _configuration["AuthConfig:User:Username"];
+            var configPass = _configuration["AuthConfig:User:Password"];
+
+            if (model.Username == configUser && model.Password == configPass)
+            {
+                var key = _signingKeyService.GetCurrentKey("SchemeA");
+                return Ok(new { token = GenerateToken(key, "Manager", model.Username) });
+            }
+
+            return Unauthorized("Invalid credentials");
         }
 
-        [HttpGet("token-b")]
-        public IActionResult GetTokenB()
+        [HttpPost("service-token")]
+        public IActionResult GetServiceToken([FromBody] ServiceKeyModel model)
         {
-            var key = _signingKeyService.GetCurrentKey("SchemeB");
-            return Ok(new { token = GenerateToken(key, "Employee") });
+            var configKey = _configuration["AuthConfig:ServiceApiKey"];
+
+            if (model.ApiKey == configKey)
+            {
+                var key = _signingKeyService.GetCurrentKey("SchemeB");
+                return Ok(new { token = GenerateToken(key, "Employee", "ServiceBot") });
+            }
+
+            return Unauthorized("Invalid API Key");
         }
 
-        private string GenerateToken(SecurityKey key, string role)
+        private string GenerateToken(SecurityKey key, string role, string subjectName)
         {
             double expirationMinutes = _configuration.GetValue<double>("JwtConfig:ExpirationMinutes", 60);
 
@@ -44,7 +60,7 @@ namespace DualTokenApi.Controllers
             {
                 Subject = new ClaimsIdentity(new[]
                 {
-                    new Claim("id", "user_id"),
+                    new Claim(ClaimTypes.Name, subjectName),
                     new Claim(ClaimTypes.Role, role)
                 }),
                 Expires = DateTime.UtcNow.AddMinutes(expirationMinutes),
